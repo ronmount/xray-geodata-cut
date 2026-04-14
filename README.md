@@ -83,3 +83,10 @@ go run ./cmd/redko-geoip-import -in ./geoip.dat -only 2gis,yandex
 ```
 
 The importer expects a text format where a key line is followed by one or more plain IP addresses. Each IP is converted to `/32` or `/128` and merged into the matching GeoIP entry. If the key does not exist yet, a new GeoIP entry is created automatically.
+
+also
+```bash
+wget -O geoip.dat https://github.com/v2fly/geoip/releases/latest/download/geoip.dat
+go run main.go -type geoip -keep "ru,cn,private" -in geoip.dat -out geoip-cut.dat
+go run ./cmd/redko-geoip-import -in ./geoip-cut.dat -out ./geoip-extended.dat
+```
