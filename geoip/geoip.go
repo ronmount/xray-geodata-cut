@@ -1,6 +1,8 @@
 package geoip
 
 import (
+	"fmt"
+	stdnet "net"
 	"os"
 	"strings"
 
@@ -73,4 +75,80 @@ func SaveGeoIP(in *router.GeoIPList, fn string) error {
 		return err
 	}
 	return os.WriteFile(fn, b, 0644)
+}
+
+func AddGeoIPEntry(in *router.GeoIPList, code string, cidrs []string, reverseMatch bool) (*router.GeoIPList, error) {
+	normalizedCode := strings.ToUpper(strings.TrimSpace(code))
+	if normalizedCode == "" {
+		return nil, fmt.Errorf("geoip code is required")
+	}
+
+	parsedCIDRs := make([]*router.CIDR, 0, len(cidrs))
+	seenCIDRs := make(map[string]struct{}, len(cidrs))
+	for _, raw := range cidrs {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		_, ipNet, err := stdnet.ParseCIDR(value)
+		if err != nil {
+			return nil, fmt.Errorf("parse CIDR %q: %w", value, err)
+		}
+		maskSize, _ := ipNet.Mask.Size()
+		ip := ipNet.IP
+		if ipv4 := ip.To4(); ipv4 != nil {
+			ip = ipv4
+		} else {
+			ip = ip.To16()
+		}
+		key := ipNet.String()
+		if _, ok := seenCIDRs[key]; ok {
+			continue
+		}
+		seenCIDRs[key] = struct{}{}
+		parsedCIDRs = append(parsedCIDRs, &router.CIDR{
+			Ip:     append([]byte(nil), ip...),
+			Prefix: uint32(maskSize),
+		})
+	}
+	if len(parsedCIDRs) == 0 {
+		return nil, fmt.Errorf("at least one CIDR is required")
+	}
+
+	out := &router.GeoIPList{
+		Entry: make([]*router.GeoIP, len(in.GetEntry())),
+	}
+	copy(out.Entry, in.GetEntry())
+
+	for _, entry := range out.Entry {
+		if strings.EqualFold(entry.GetCountryCode(), normalizedCode) {
+			existing := make(map[string]struct{}, len(entry.GetCidr()))
+			for _, cidr := range entry.GetCidr() {
+				existing[cidrKey(cidr)] = struct{}{}
+			}
+			for _, cidr := range parsedCIDRs {
+				key := cidrKey(cidr)
+				if _, ok := existing[key]; ok {
+					continue
+				}
+				entry.Cidr = append(entry.Cidr, cidr)
+				existing[key] = struct{}{}
+			}
+			return out, nil
+		}
+	}
+
+	out.Entry = append(out.Entry, &router.GeoIP{
+		CountryCode:  normalizedCode,
+		Cidr:         parsedCIDRs,
+		ReverseMatch: reverseMatch,
+	})
+	return out, nil
+}
+
+func cidrKey(cidr *router.CIDR) string {
+	if cidr == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s/%d", stdnet.IP(cidr.GetIp()).String(), cidr.GetPrefix())
 }
