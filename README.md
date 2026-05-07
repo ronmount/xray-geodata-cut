@@ -84,9 +84,21 @@ go run ./cmd/redko-geoip-import -in ./geoip.dat -only 2gis,yandex
 
 The importer expects a text format where a key line is followed by one or more plain IP addresses. Each IP is converted to `/32` or `/128` and merged into the matching GeoIP entry. If the key does not exist yet, a new GeoIP entry is created automatically.
 
+Import a flat IP/CIDR list from a local text file:
+
+```bash
+go run ./cmd/file-geoip-import -in ./geoip.dat
+go run ./cmd/file-geoip-import -in ./geoip.dat -out ./geoip-new.dat
+go run ./cmd/file-geoip-import -in ./geoip.dat -file ./ddos-guard.txt
+go run ./cmd/file-geoip-import -in ./geoip.dat -file ./ddos-guard.txt -code DDOS-GUARD
+```
+
+The local file importer expects one IP or CIDR per line, ignores empty lines and lines starting with `#`, converts plain IPs to `/32` or `/128`, and by default derives the GeoIP code from the file name. For `ddos-guard.txt`, the default code is `DDOS-GUARD`.
+
 also
 ```bash
 wget -O geoip.dat https://github.com/v2fly/geoip/releases/latest/download/geoip.dat
 go run main.go -type geoip -keep "ru,cn,private" -in geoip.dat -out geoip-cut.dat
 go run ./cmd/redko-geoip-import -in ./geoip-cut.dat -out ./geoip-extended.dat
+go run ./cmd/file-geoip-import -in ./geoip-extended.dat -file ./ddos-guard.txt -out geoip-extended-with-file.dat
 ```
